@@ -7,7 +7,7 @@ import { useUserAuth } from "../context/AuthContext";
 
 export default function AdminPanel() {
   // --- 🔒 UPDATE THIS EMAIL EXACTLY ---
-  const ADMIN_EMAIL = "YOUR_GMAIL_HERE"; 
+  const ADMIN_EMAIL = "siddhant.anand17@gmail.com"; 
   // ------------------------------------
 
   const { user, loading: authLoading } = useUserAuth();
