@@ -6,55 +6,115 @@ import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { useUserAuth } from "../context/AuthContext";
 
 export default function AdminPanel() {
-  // --- 🔒 UPDATE THIS EMAIL ---
-  const ADMIN_EMAIL = "flagfestindia@gmail.com"; // <--- CHANGE THIS
-  // ----------------------------
+  // --- 🔒 UPDATE THIS EMAIL EXACTLY ---
+  const ADMIN_EMAIL = "YOUR_GMAIL_HERE"; 
+  // ------------------------------------
 
   const { user, loading: authLoading } = useUserAuth();
   const router = useRouter();
+  const [dataLoading, setDataLoading] = useState(true); // Loading data state
   const [users, setUsers] = useState([]);
   const [trips, setTrips] = useState([]);
+  const [isAuthorized, setIsAuthorized] = useState(false); // Permission state
 
   useEffect(() => {
-    if (!authLoading && user) {
-      // DEBUG LOGGING: Open Console (F12) to see this
-      console.log("LOGGED IN AS:", user.email);
-      console.log("REQUIRED ADMIN:", ADMIN_EMAIL);
+    // 1. Wait for Auth to finish loading
+    if (authLoading) return;
 
-      if (user.email !== ADMIN_EMAIL) {
-        // Just show an alert instead of kicking out immediately so you can read it
-        alert(`ACCESS DENIED.\n\nYou are logged in as: ${user.email}\nThe Admin List allows: ${ADMIN_EMAIL}`);
-        router.push("/");
-      } else {
-        fetchData();
-      }
+    // 2. Check User
+    if (!user) {
+      router.push("/"); // Not logged in -> Go Home
+      return;
+    }
+
+    // 3. Check Email
+    if (user.email !== ADMIN_EMAIL) {
+      alert(`ACCESS DENIED.\nLogged in as: ${user.email}\nRequired: ${ADMIN_EMAIL}`);
+      router.push("/"); // Wrong email -> Go Home
+    } else {
+      // 4. Success! Allow access and fetch data
+      setIsAuthorized(true);
+      fetchData();
     }
   }, [user, authLoading]);
 
   const fetchData = async () => {
-    const usersSnap = await getDocs(collection(db, "users"));
-    setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    const tripsSnap = await getDocs(collection(db, "trips"));
-    setTrips(tripsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    try {
+      const usersSnap = await getDocs(collection(db, "users"));
+      setUsers(usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const tripsSnap = await getDocs(collection(db, "trips"));
+      setTrips(tripsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setDataLoading(false);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  if (authLoading) return <div className="text-white text-center mt-20">Loading...</div>;
+  const handleDeleteUser = async (id) => {
+    if(confirm("Ban user?")) { await deleteDoc(doc(db, "users", id)); setUsers(users.filter(u=>u.id!==id)); }
+  };
+  
+  const handleDeleteTrip = async (id) => {
+    if(confirm("Delete trip?")) { await deleteDoc(doc(db, "trips", id)); setTrips(trips.filter(t=>t.id!==id)); }
+  };
 
+  // --- RENDER LOGIC ---
+
+  // 1. Show Loading Screen while checking Auth
+  if (authLoading) {
+    return <div className="h-screen flex items-center justify-center text-white text-xl font-bold">Checking Identity... 🕵️‍♂️</div>;
+  }
+
+  // 2. If not authorized yet (or about to redirect), hide everything
+  if (!isAuthorized) {
+    return <div className="h-screen flex items-center justify-center text-red-500 font-bold">Verifying Access...</div>;
+  }
+
+  // 3. ONLY Show Admin Panel if Authorized
   return (
-    <div className="p-10 text-white">
-      <h1 className="text-3xl font-black text-red-500 mb-6">ADMIN PANEL 🔓</h1>
-      <p className="mb-4 text-green-400">Welcome, {user?.email}</p>
+    <div className="min-h-screen p-8 text-white bg-black">
+      <h1 className="text-4xl font-black text-red-500 mb-2">ADMIN PANEL ⚡️</h1>
+      <p className="text-green-400 font-mono mb-8">✓ Logged in as {user.email}</p>
       
-      <div className="grid gap-8">
-        <div>
-          <h2 className="text-xl font-bold border-b border-white/20 pb-2 mb-4">Users ({users.length})</h2>
-          {users.map(u => <div key={u.id} className="text-sm bg-white/10 p-2 rounded mb-2">{u.email} ({u.name})</div>)}
+      {dataLoading ? (
+        <p>Loading Data...</p>
+      ) : (
+        <div className="grid gap-12">
+          
+          {/* USERS SECTION */}
+          <div>
+            <h2 className="text-2xl font-bold text-white border-b border-white/20 pb-4 mb-4">Users ({users.length})</h2>
+            <div className="grid gap-4">
+              {users.map(u => (
+                <div key={u.id} className="bg-white/5 p-4 rounded-xl flex justify-between items-center border border-white/10">
+                  <div>
+                    <p className="font-bold">{u.name || "No Name"}</p>
+                    <p className="text-sm text-white/50">{u.email}</p>
+                  </div>
+                  <button onClick={() => handleDeleteUser(u.id)} className="bg-red-500/20 text-red-400 px-4 py-2 rounded font-bold hover:bg-red-500 hover:text-white transition">Ban 🚫</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* TRIPS SECTION */}
+          <div>
+            <h2 className="text-2xl font-bold text-white border-b border-white/20 pb-4 mb-4">Trips ({trips.length})</h2>
+            <div className="grid gap-4">
+              {trips.map(t => (
+                <div key={t.id} className="bg-white/5 p-4 rounded-xl flex justify-between items-center border border-white/10">
+                  <div>
+                    <p className="font-bold text-cyan-400">{t.title}</p>
+                    <p className="text-sm text-white/50">{t.hostName}</p>
+                  </div>
+                  <button onClick={() => handleDeleteTrip(t.id)} className="bg-red-500/20 text-red-400 px-4 py-2 rounded font-bold hover:bg-red-500 hover:text-white transition">Delete 🗑️</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
         </div>
-        <div>
-          <h2 className="text-xl font-bold border-b border-white/20 pb-2 mb-4">Trips ({trips.length})</h2>
-          {trips.map(t => <div key={t.id} className="text-sm bg-white/10 p-2 rounded mb-2">{t.title}</div>)}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
